@@ -110,6 +110,23 @@ typedef struct instr_cache_block {
 // External instruction cache
 extern icache_block Icache[ICACHE_NUM_SETS][ICACHE_ASSOCIATIVITY]; //Each element of this would be indexed according to appropriate set index
 
+
+#define DCACHE_NUM_SETS 256
+#define DCACHE_ASSOCIATIVITY 8 //Number of blocks per set
+
+typedef struct data_cache_block {
+
+    uint32_t data;
+    uint32_t address;
+    int valid;
+    int lru; //Max value for this would be equal to DCACHE_ASSOCIATIVITY
+
+} dcache_block;
+
+// External data cache
+extern dcache_block Dcache[DCACHE_NUM_SETS][DCACHE_ASSOCIATIVITY]; //Each element of this would be indexed according to appropriate set index
+
+
 /* global variable -- pipeline state */
 extern Pipe_State pipe;
 

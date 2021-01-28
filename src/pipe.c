@@ -79,6 +79,100 @@ uint32_t icache_lookup(uint32_t mem_addr)
     return Icache[set_index][blockIdx].instruction;
 }
 
+/*Instruction cache */
+dcache_block Dcache[DCACHE_NUM_SETS][DCACHE_ASSOCIATIVITY];
+
+// Just need to invalidate the particular set whenever writing so that it doesnt read incorrect data
+uint32_t dcache_lookup(uint32_t mem_addr)
+{
+    uint32_t set_index = (mem_addr>>5)&(0X000000FF); //Set index = PC[12:5]
+
+    int blockIdx;
+    for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
+    {
+        if((mem_addr == Dcache[set_index][blockIdx].address)&& (Dcache[set_index][blockIdx].valid ==1))
+            break; //Its a hit
+    }
+
+    // Its a miss
+    if(blockIdx == DCACHE_ASSOCIATIVITY)
+    {
+        //pipe.instr_miss_stall = 50;
+        for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
+            {
+                if(Dcache[set_index][blockIdx].lru == DCACHE_ASSOCIATIVITY-1)
+                    break; //Detected the lru block which can be replaced
+            }
+        
+        Dcache[set_index][blockIdx].address = mem_addr;
+        Dcache[set_index][blockIdx].data = mem_read_32(mem_addr& ~3);
+        Dcache[set_index][blockIdx].valid = 1;
+
+        //Update LRU status
+        for(int i = 0; i< DCACHE_ASSOCIATIVITY; i++)
+            {
+                if( Dcache[set_index][i].lru < Dcache[set_index][blockIdx].lru)
+                    Dcache[set_index][i].lru++;                
+            }
+    }
+    else
+    {
+        //pipe.instr_miss_stall = 0;
+        for(int i=0; i<DCACHE_ASSOCIATIVITY; i++)
+        {
+            if( Dcache[set_index][i].lru < Dcache[set_index][blockIdx].lru)
+                Dcache[set_index][i].lru++;
+        }
+    }
+    Dcache[set_index][blockIdx].lru = 0;
+
+    return Dcache[set_index][blockIdx].data;
+}
+
+void dcache_write(uint32_t mem_addr, uint32_t val)
+{
+    uint32_t set_index = (mem_addr>>5)&(0X000000FF); //Set index = PC[12:5]
+
+    int blockIdx;
+    for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
+    {
+        if((mem_addr == Dcache[set_index][blockIdx].address)&& (Dcache[set_index][blockIdx].valid ==1))
+            break; //Its a hit
+    }
+
+    // Its a miss
+    if(blockIdx == DCACHE_ASSOCIATIVITY)
+    {
+        //pipe.instr_miss_stall = 50;
+        for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
+            {
+                if(Dcache[set_index][blockIdx].lru == DCACHE_ASSOCIATIVITY-1)
+                    break; //Detected the lru block which can be replaced
+            }
+        
+        Dcache[set_index][blockIdx].address = mem_addr;
+        mem_write_32(mem_addr& ~3, val);
+        Dcache[set_index][blockIdx].valid = 0;
+
+        //Update LRU status
+        for(int i = 0; i< DCACHE_ASSOCIATIVITY; i++)
+            {
+                if( Dcache[set_index][i].lru < Dcache[set_index][blockIdx].lru)
+                    Dcache[set_index][i].lru++;                
+            }
+    }
+    else
+    {
+        //pipe.instr_miss_stall = 0;
+        for(int i=0; i<DCACHE_ASSOCIATIVITY; i++)
+        {
+            if( Dcache[set_index][i].lru < Dcache[set_index][blockIdx].lru)
+                Dcache[set_index][i].lru++;
+        }
+    }
+    Dcache[set_index][blockIdx].lru = 0;
+}
+
 void pipe_init()
 {
     memset(&pipe, 0, sizeof(Pipe_State));
@@ -206,7 +300,8 @@ void pipe_stage_mem()
 
     uint32_t val = 0;
     if (op->is_mem)
-        val = mem_read_32(op->mem_addr & ~3);
+        dcache_lookup(op->mem_addr);
+        //val = mem_read_32(op->mem_addr & ~3);
 
     switch (op->opcode) {
         case OP_LW:
@@ -263,7 +358,8 @@ void pipe_stage_mem()
                 case 3: val = (val & 0x00FFFFFF) | ((op->mem_value & 0xFF) << 24); break;
             }
 
-            mem_write_32(op->mem_addr & ~3, val);
+            //mem_write_32(op->mem_addr & ~3, val);
+            dcache_write(op->mem_addr , val);
             break;
 
         case OP_SH:
@@ -277,13 +373,15 @@ void pipe_stage_mem()
 #ifdef DEBUG
             printf("new word %08x\n", val);
 #endif
-
-            mem_write_32(op->mem_addr & ~3, val);
+            
+            //mem_write_32(op->mem_addr & ~3, val);
+            dcache_write(op->mem_addr, val);
             break;
 
         case OP_SW:
             val = op->mem_value;
-            mem_write_32(op->mem_addr & ~3, val);
+            //mem_write_32(op->mem_addr & ~3, val);
+            dcache_write(op->mem_addr, val);
             break;
     }
 
@@ -732,7 +830,7 @@ void pipe_stage_fetch()
     {
         pipe.instr_miss_stall--;
     }
-    
+
     /* if pipeline is stalled (our output slot is not empty), return */    
     if (pipe.decode_op != NULL)
         return;
@@ -742,7 +840,6 @@ void pipe_stage_fetch()
     memset(op, 0, sizeof(Pipe_Op));
     op->reg_src1 = op->reg_src2 = op->reg_dst = -1;
 
-    //op->instruction = mem_read_32(pipe.PC);
     op->instruction = icache_lookup(pipe.PC);
 
     op->pc = pipe.PC;
