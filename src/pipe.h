@@ -56,6 +56,7 @@ typedef struct Pipe_Op {
     int is_link;          /* jump-and-link or branch-and-link inst? */
     int link_reg;         /* register to place link into? */
 
+
 } Pipe_Op;
 
 /* The pipe state represents the current state of the pipeline. It holds a
@@ -89,6 +90,7 @@ typedef struct Pipe_State {
     int multiplier_stall; /* number of remaining cycles until HI/LO are ready */
 
     /* place other information here as necessary */
+    int instr_miss_stall;
 
 } Pipe_State;
 
@@ -98,7 +100,7 @@ typedef struct Pipe_State {
 
 typedef struct instr_cache_block {
 
-    uint32_t PC;
+    uint32_t instruction;
     uint32_t address;
     int valid;
     int lru; //Max value for this would be equal to ICACHE_ASSOCIATIVITY

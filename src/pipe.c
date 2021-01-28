@@ -47,21 +47,27 @@ uint32_t icache_lookup(uint32_t mem_addr)
     // Its a miss
     if(blockIdx == ICACHE_ASSOCIATIVITY)
     {
+        pipe.instr_miss_stall = 50;
         for(blockIdx = 0; blockIdx< ICACHE_ASSOCIATIVITY; blockIdx++)
-            if(Icache[set_index][blockIdx].lru == ICACHE_ASSOCIATIVITY-1)
-                break; //Detected the lru block which can be replaced
+            {
+                if(Icache[set_index][blockIdx].lru == ICACHE_ASSOCIATIVITY-1)
+                    break; //Detected the lru block which can be replaced
+            }
         
         Icache[set_index][blockIdx].address = mem_addr;
-        Icache[set_index][blockIdx].PC = mem_read_32(mem_addr);
+        Icache[set_index][blockIdx].instruction = mem_read_32(mem_addr);
         Icache[set_index][blockIdx].valid = 1;
 
         //Update LRU status
         for(int i = 0; i< ICACHE_ASSOCIATIVITY; i++)
-            if( Icache[set_index][i].lru < Icache[set_index][blockIdx].lru)
-                Icache[set_index][i].lru++;                
+            {
+                if( Icache[set_index][i].lru < Icache[set_index][blockIdx].lru)
+                    Icache[set_index][i].lru++;                
+            }
     }
     else
     {
+        pipe.instr_miss_stall = 0;
         for(int i=0; i<ICACHE_ASSOCIATIVITY; i++)
         {
             if( Icache[set_index][i].lru < Icache[set_index][blockIdx].lru)
@@ -70,7 +76,7 @@ uint32_t icache_lookup(uint32_t mem_addr)
     }
     Icache[set_index][blockIdx].lru = 0;
 
-    return Icache[set_index][blockIdx].PC;
+    return Icache[set_index][blockIdx].instruction;
 }
 
 void pipe_init()
@@ -85,9 +91,10 @@ void pipe_init()
                 {
                     Icache[set_index][blockIdx].lru = blockIdx;
                     Icache[set_index][blockIdx].valid = 0;
-                    Icache[set_index][blockIdx].PC = 0;
+                    Icache[set_index][blockIdx].instruction = 0;
                 }       
         }        
+    pipe.instr_miss_stall = 0;
 }
 
 void pipe_cycle()
@@ -720,7 +727,13 @@ void pipe_stage_decode()
 
 void pipe_stage_fetch()
 {
-    /* if pipeline is stalled (our output slot is not empty), return */
+
+    if (pipe.instr_miss_stall > 0)
+    {
+        pipe.instr_miss_stall--;
+    }
+    
+    /* if pipeline is stalled (our output slot is not empty), return */    
     if (pipe.decode_op != NULL)
         return;
 
@@ -729,7 +742,9 @@ void pipe_stage_fetch()
     memset(op, 0, sizeof(Pipe_Op));
     op->reg_src1 = op->reg_src2 = op->reg_dst = -1;
 
-    op->instruction = mem_read_32(pipe.PC);
+    //op->instruction = mem_read_32(pipe.PC);
+    op->instruction = icache_lookup(pipe.PC);
+
     op->pc = pipe.PC;
     pipe.decode_op = op;
 
