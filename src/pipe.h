@@ -92,6 +92,22 @@ typedef struct Pipe_State {
 
 } Pipe_State;
 
+
+#define ICACHE_NUM_SETS 64
+#define ICACHE_ASSOCIATIVITY 4 //Number of blocks per set
+
+typedef struct instr_cache_block {
+
+    uint32_t PC;
+    uint32_t address;
+    int valid;
+    int lru; //Max value for this would be equal to ICACHE_ASSOCIATIVITY
+
+} icache_block;
+
+// External instruction cache
+extern icache_block Icache[ICACHE_NUM_SETS][ICACHE_ASSOCIATIVITY]; //Each element of this would be indexed according to appropriate set index
+
 /* global variable -- pipeline state */
 extern Pipe_State pipe;
 

@@ -30,10 +30,64 @@ void print_op(Pipe_Op *op)
 /* global pipeline state */
 Pipe_State pipe;
 
+/*Instruction cache */
+icache_block Icache[ICACHE_NUM_SETS][ICACHE_ASSOCIATIVITY];
+
+uint32_t icache_lookup(uint32_t mem_addr)
+{
+    uint32_t set_index = (mem_addr>>5)&(0X0000003F); //Set index = PC[10:5]
+
+    int blockIdx;
+    for(blockIdx = 0; blockIdx< ICACHE_ASSOCIATIVITY; blockIdx++)
+    {
+        if((mem_addr == Icache[set_index][blockIdx].address)&& (Icache[set_index][blockIdx].valid ==1))
+            break; //Its a hit
+    }
+
+    // Its a miss
+    if(blockIdx == ICACHE_ASSOCIATIVITY)
+    {
+        for(blockIdx = 0; blockIdx< ICACHE_ASSOCIATIVITY; blockIdx++)
+            if(Icache[set_index][blockIdx].lru == ICACHE_ASSOCIATIVITY-1)
+                break; //Detected the lru block which can be replaced
+        
+        Icache[set_index][blockIdx].address = mem_addr;
+        Icache[set_index][blockIdx].PC = mem_read_32(mem_addr);
+        Icache[set_index][blockIdx].valid = 1;
+
+        //Update LRU status
+        for(int i = 0; i< ICACHE_ASSOCIATIVITY; i++)
+            if( Icache[set_index][i].lru < Icache[set_index][blockIdx].lru)
+                Icache[set_index][i].lru++;                
+    }
+    else
+    {
+        for(int i=0; i<ICACHE_ASSOCIATIVITY; i++)
+        {
+            if( Icache[set_index][i].lru < Icache[set_index][blockIdx].lru)
+                Icache[set_index][i].lru++;
+        }
+    }
+    Icache[set_index][blockIdx].lru = 0;
+
+    return Icache[set_index][blockIdx].PC;
+}
+
 void pipe_init()
 {
     memset(&pipe, 0, sizeof(Pipe_State));
     pipe.PC = 0x00400000;
+
+    //Initializing elements of instruction cache
+    for(uint32_t set_index=0; set_index<ICACHE_NUM_SETS;set_index++)
+        {
+            for (int blockIdx=0; blockIdx<ICACHE_ASSOCIATIVITY; blockIdx++)
+                {
+                    Icache[set_index][blockIdx].lru = blockIdx;
+                    Icache[set_index][blockIdx].valid = 0;
+                    Icache[set_index][blockIdx].PC = 0;
+                }       
+        }        
 }
 
 void pipe_cycle()
