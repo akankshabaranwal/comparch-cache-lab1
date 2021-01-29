@@ -309,6 +309,7 @@ void pipe_stage_mem()
     if (pipe.data_miss_stall > 0)
     {
         pipe.data_miss_stall--;
+        return;
     }
 
     /* if there is no instruction in this pipeline stage, we are done */
