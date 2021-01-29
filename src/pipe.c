@@ -86,8 +86,8 @@ dcache_block Dcache[DCACHE_NUM_SETS][DCACHE_ASSOCIATIVITY];
 uint32_t dcache_lookup(uint32_t mem_addr)
 {
     uint32_t set_index = (mem_addr>>5)&(0X000000FF); //Set index = PC[12:5]
-
     int blockIdx;
+
     for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
     {
         if((mem_addr == Dcache[set_index][blockIdx].address)&& (Dcache[set_index][blockIdx].valid ==1))
@@ -97,7 +97,6 @@ uint32_t dcache_lookup(uint32_t mem_addr)
     // Its a miss
     if(blockIdx == DCACHE_ASSOCIATIVITY)
     {
-        //pipe.instr_miss_stall = 50;
         for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
             {
                 if(Dcache[set_index][blockIdx].lru == DCACHE_ASSOCIATIVITY-1)
@@ -105,7 +104,7 @@ uint32_t dcache_lookup(uint32_t mem_addr)
             }
         
         Dcache[set_index][blockIdx].address = mem_addr;
-        Dcache[set_index][blockIdx].data = mem_read_32(mem_addr& ~3);
+        Dcache[set_index][blockIdx].data = mem_read_32(mem_addr);
         Dcache[set_index][blockIdx].valid = 1;
 
         //Update LRU status
@@ -117,7 +116,6 @@ uint32_t dcache_lookup(uint32_t mem_addr)
     }
     else
     {
-        //pipe.instr_miss_stall = 0;
         for(int i=0; i<DCACHE_ASSOCIATIVITY; i++)
         {
             if( Dcache[set_index][i].lru < Dcache[set_index][blockIdx].lru)
@@ -125,7 +123,6 @@ uint32_t dcache_lookup(uint32_t mem_addr)
         }
     }
     Dcache[set_index][blockIdx].lru = 0;
-
     return Dcache[set_index][blockIdx].data;
 }
 
@@ -151,10 +148,6 @@ void dcache_write(uint32_t mem_addr, uint32_t val)
                     break; //Detected the lru block which can be replaced
             }
         
-        Dcache[set_index][blockIdx].address = mem_addr& ~3;
-        mem_write_32(mem_addr& ~3, val);
-        Dcache[set_index][blockIdx].valid = 1;
-
         //Update LRU status
         for(int i = 0; i< DCACHE_ASSOCIATIVITY; i++)
             {
@@ -170,6 +163,11 @@ void dcache_write(uint32_t mem_addr, uint32_t val)
                 Dcache[set_index][i].lru++;
         }
     }
+
+    Dcache[set_index][blockIdx].address = mem_addr;
+    mem_write_32(mem_addr, val);
+    Dcache[set_index][blockIdx].data = val;
+    Dcache[set_index][blockIdx].valid = 1;
     Dcache[set_index][blockIdx].lru = 0;
 }
 
@@ -199,7 +197,6 @@ void pipe_init()
                     Dcache[set_index][blockIdx].lru = blockIdx;
                     Dcache[set_index][blockIdx].valid = 0;
                     Dcache[set_index][blockIdx].data = 0;
-                    Dcache[set_index][blockIdx].address = 0;
                 }       
         }        
     pipe.instr_miss_stall = 0;
@@ -299,7 +296,6 @@ void pipe_stage_wb()
 
     /* free the op */
     free(op);
-
     stat_inst_retire++;
 }
 
@@ -314,9 +310,9 @@ void pipe_stage_mem()
 
     uint32_t val = 0;
     if (op->is_mem)
-        val = dcache_lookup(op->mem_addr);
-        //val = mem_read_32(op->mem_addr & ~3);
-
+        {
+        val = dcache_lookup(op->mem_addr& ~3);
+        }
     switch (op->opcode) {
         case OP_LW:
         case OP_LH:
@@ -372,8 +368,7 @@ void pipe_stage_mem()
                 case 3: val = (val & 0x00FFFFFF) | ((op->mem_value & 0xFF) << 24); break;
             }
 
-            mem_write_32(op->mem_addr & ~3, val);
-            //dcache_write(op->mem_addr , val);
+            dcache_write(op->mem_addr & ~3, val);
             break;
 
         case OP_SH:
@@ -388,14 +383,12 @@ void pipe_stage_mem()
             printf("new word %08x\n", val);
 #endif
             
-            mem_write_32(op->mem_addr & ~3, val);
-            //dcache_write(op->mem_addr, val);
+            dcache_write(op->mem_addr& ~3, val);
             break;
 
         case OP_SW:
             val = op->mem_value;
-            mem_write_32(op->mem_addr & ~3, val);
-            //dcache_write(op->mem_addr, val);
+            dcache_write(op->mem_addr& ~3, val);
             break;
     }
 
@@ -840,10 +833,10 @@ void pipe_stage_decode()
 void pipe_stage_fetch()
 {
 
-    /*if (pipe.instr_miss_stall > 0)
+    if (pipe.instr_miss_stall > 0)
     {
         pipe.instr_miss_stall--;
-    }*/
+    }
 
     /* if pipeline is stalled (our output slot is not empty), return */    
     if (pipe.decode_op != NULL)
