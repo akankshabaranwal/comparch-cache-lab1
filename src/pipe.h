@@ -96,6 +96,8 @@ typedef struct Pipe_State {
 } Pipe_State;
 
 
+#define MEMORY_MISS_STALL 50 //Number of blocks per set
+
 #define ICACHE_NUM_SETS 64
 #define ICACHE_ASSOCIATIVITY 4 //Number of blocks per set
 

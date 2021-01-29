@@ -47,7 +47,7 @@ uint32_t icache_lookup(uint32_t mem_addr)
     // Its a miss
     if(blockIdx == ICACHE_ASSOCIATIVITY)
     {
-        pipe.instr_miss_stall = 50;
+        pipe.instr_miss_stall = MEMORY_MISS_STALL;
         for(blockIdx = 0; blockIdx< ICACHE_ASSOCIATIVITY; blockIdx++)
             {
                 if(Icache[set_index][blockIdx].lru == ICACHE_ASSOCIATIVITY-1)
@@ -97,7 +97,7 @@ uint32_t dcache_lookup(uint32_t mem_addr)
     // Its a miss
     if(blockIdx == DCACHE_ASSOCIATIVITY)
     {
-        pipe.data_miss_stall = 50;
+        pipe.data_miss_stall = MEMORY_MISS_STALL;
         for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
             {
                 if(Dcache[set_index][blockIdx].lru == DCACHE_ASSOCIATIVITY-1)
@@ -143,7 +143,7 @@ void dcache_write(uint32_t mem_addr, uint32_t val)
     // Its a miss
     if(blockIdx == DCACHE_ASSOCIATIVITY)
     {
-        pipe.data_miss_stall = 50;
+        pipe.data_miss_stall = MEMORY_MISS_STALL;
         for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
             {
                 if(Dcache[set_index][blockIdx].lru == DCACHE_ASSOCIATIVITY-1)
@@ -852,6 +852,8 @@ void pipe_stage_fetch()
         return;
 
     /* Allocate an op and send it down the pipeline. */
+    // This part below should be stalled if instruction has not been fetched??
+
     Pipe_Op *op = malloc(sizeof(Pipe_Op));
     memset(op, 0, sizeof(Pipe_Op));
     op->reg_src1 = op->reg_src2 = op->reg_dst = -1;
@@ -865,4 +867,5 @@ void pipe_stage_fetch()
     pipe.PC += 4;
 
     stat_inst_fetch++;
+
 }
