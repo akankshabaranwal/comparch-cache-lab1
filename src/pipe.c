@@ -202,6 +202,7 @@ void pipe_init()
                     Dcache[set_index][blockIdx].data = 0;
                 }       
         }        
+
     pipe.instr_miss_stall = 0;
 }
 
@@ -842,6 +843,7 @@ void pipe_stage_decode()
 void pipe_stage_fetch()
 {
 
+
     if (pipe.instr_miss_stall > 0)
     {
         pipe.instr_miss_stall--;
@@ -852,13 +854,17 @@ void pipe_stage_fetch()
         return;
 
     /* Allocate an op and send it down the pipeline. */
-    // This part below should be stalled if instruction has not been fetched??
 
     Pipe_Op *op = malloc(sizeof(Pipe_Op));
     memset(op, 0, sizeof(Pipe_Op));
     op->reg_src1 = op->reg_src2 = op->reg_dst = -1;
 
     op->instruction = icache_lookup(pipe.PC);
+
+    if (pipe.instr_miss_stall > 0)
+    {
+        return;
+    }
 
     op->pc = pipe.PC;
     pipe.decode_op = op;
