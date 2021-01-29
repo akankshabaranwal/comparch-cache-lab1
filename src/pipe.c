@@ -82,7 +82,6 @@ uint32_t icache_lookup(uint32_t mem_addr)
 /*Instruction cache */
 dcache_block Dcache[DCACHE_NUM_SETS][DCACHE_ASSOCIATIVITY];
 
-// Just need to invalidate the particular set whenever writing so that it doesnt read incorrect data
 uint32_t dcache_lookup(uint32_t mem_addr)
 {
     uint32_t set_index = (mem_addr>>5)&(0X000000FF); //Set index = PC[12:5]
@@ -90,6 +89,7 @@ uint32_t dcache_lookup(uint32_t mem_addr)
 
     for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
     {
+
         if((mem_addr == Dcache[set_index][blockIdx].address)&& (Dcache[set_index][blockIdx].valid ==1))
             break; //Its a hit
     }
@@ -97,6 +97,7 @@ uint32_t dcache_lookup(uint32_t mem_addr)
     // Its a miss
     if(blockIdx == DCACHE_ASSOCIATIVITY)
     {
+        pipe.data_miss_stall = 50;
         for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
             {
                 if(Dcache[set_index][blockIdx].lru == DCACHE_ASSOCIATIVITY-1)
@@ -116,6 +117,7 @@ uint32_t dcache_lookup(uint32_t mem_addr)
     }
     else
     {
+        pipe.data_miss_stall = 0;
         for(int i=0; i<DCACHE_ASSOCIATIVITY; i++)
         {
             if( Dcache[set_index][i].lru < Dcache[set_index][blockIdx].lru)
@@ -141,7 +143,7 @@ void dcache_write(uint32_t mem_addr, uint32_t val)
     // Its a miss
     if(blockIdx == DCACHE_ASSOCIATIVITY)
     {
-        //pipe.instr_miss_stall = 50;
+        pipe.data_miss_stall = 50;
         for(blockIdx = 0; blockIdx< DCACHE_ASSOCIATIVITY; blockIdx++)
             {
                 if(Dcache[set_index][blockIdx].lru == DCACHE_ASSOCIATIVITY-1)
@@ -157,6 +159,7 @@ void dcache_write(uint32_t mem_addr, uint32_t val)
     }
     else
     {
+        pipe.data_miss_stall = 0;
         for(int i=0; i<DCACHE_ASSOCIATIVITY; i++)
         {
             if( Dcache[set_index][i].lru < Dcache[set_index][blockIdx].lru)
@@ -301,6 +304,12 @@ void pipe_stage_wb()
 
 void pipe_stage_mem()
 {
+    
+    if (pipe.data_miss_stall > 0)
+    {
+        pipe.data_miss_stall--;
+    }
+
     /* if there is no instruction in this pipeline stage, we are done */
     if (!pipe.mem_op)
         return;

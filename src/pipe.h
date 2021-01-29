@@ -91,6 +91,7 @@ typedef struct Pipe_State {
 
     /* place other information here as necessary */
     int instr_miss_stall;
+    int data_miss_stall;
 
 } Pipe_State;
 
